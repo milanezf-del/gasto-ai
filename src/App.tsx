@@ -1,62 +1,119 @@
 import React from "react";
 import { AlertCircle, X } from "lucide-react";
-import { api } from "./lib/api";
 import { useTheme } from "./hooks/useTheme";
-import { useSummary } from "./hooks/useSummary";
+import { useAuth } from "./hooks/useAuth";
+import { useToast } from "./hooks/useToast";
+import { useDashboard } from "./hooks/useDashboard";
 import { useExpenses } from "./hooks/useExpenses";
 import { useBudgets } from "./hooks/useBudgets";
-import { useAccounts } from "./hooks/useAccounts";
+import { useRules } from "./hooks/useRules";
 import { useAiAssistant } from "./hooks/useAiAssistant";
 import type { SuggestedAction, WorkspaceView } from "./types/finance";
 import { SidebarNav } from "./components/SidebarNav";
 import { TopBar } from "./components/TopBar";
 import { OverviewView } from "./components/OverviewView";
 import { TransactionsView } from "./components/TransactionsView";
+import { ExpenseDetailView } from "./components/ExpenseDetailView";
 import { BudgetsView } from "./components/BudgetsView";
-import { AccountsView } from "./components/AccountsView";
+import { RulesView } from "./components/RulesView";
 import { AICopilotRail } from "./components/AICopilotRail";
 import { AddTransactionModal } from "./components/AddTransactionModal";
+import { AuthGate } from "./components/AuthGate";
+import { CardSkeleton } from "./components/StateNotice";
+import { ToastContainer } from "./components/ToastContainer";
 
 export default function App() {
   const { theme, setTheme } = useTheme();
+  const auth = useAuth();
+  const isAuthenticated = Boolean(auth.user);
+  const { toasts, pushToast, dismissToast } = useToast();
+
   const [activeView, setActiveView] = React.useState<WorkspaceView>("overview");
-  const [apiHealthy, setApiHealthy] = React.useState<boolean | null>(null);
-
-  const summaryState = useSummary();
-  const expensesState = useExpenses();
-  const budgetsState = useBudgets();
-  const accountsState = useAccounts();
-  const aiState = useAiAssistant();
-
+  const [selectedExpenseId, setSelectedExpenseId] = React.useState<
+    string | null
+  >(null);
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const [copilotOpenDesktop, setCopilotOpenDesktop] = React.useState(true);
   const [copilotDrawerOpen, setCopilotDrawerOpen] = React.useState(false);
   const [newEntryModalOpen, setNewEntryModalOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    let mounted = true;
-    api
-      .health()
-      .then((res) => {
-        if (mounted) setApiHealthy(Boolean(res.ok));
-      })
-      .catch(() => {
-        if (mounted) setApiHealthy(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const notifyError = React.useCallback(
+    (msg: string) => pushToast(msg, "error"),
+    [pushToast]
+  );
+  const notifySuccess = React.useCallback(
+    (msg: string) => pushToast(msg, "success"),
+    [pushToast]
+  );
+
+  const dashboardState = useDashboard(isAuthenticated);
+  const refetchDashboard = dashboardState.refetch;
+  const rulesState = useRules(isAuthenticated);
+  const refetchRules = rulesState.refetch;
+
+  const handleBudgetChanged = React.useCallback(() => {
+    void refetchDashboard();
+  }, [refetchDashboard]);
+
+  const budgetsState = useBudgets(isAuthenticated, handleBudgetChanged);
+  const refetchBudgets = budgetsState.refetch;
+
+  const refreshAggregates = React.useCallback(() => {
+    void refetchDashboard();
+    void refetchBudgets();
+    void refetchRules();
+  }, [refetchDashboard, refetchBudgets, refetchRules]);
+
+  const expensesState = useExpenses(
+    isAuthenticated,
+    refreshAggregates,
+    notifyError
+  );
+  const aiState = useAiAssistant();
+
+  if (auth.loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] dark:bg-[#0b0f19] p-6">
+        <div className="w-full max-w-md">
+          <CardSkeleton lines={4} />
+        </div>
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </div>
+    );
+  }
+
+  if (!auth.user) {
+    return (
+      <>
+        <AuthGate
+          theme={theme}
+          onChangeTheme={setTheme}
+          submitting={auth.submitting}
+          error={auth.error}
+          notice={auth.notice}
+          onClearMessages={auth.clearMessages}
+          onLogin={auth.login}
+          onSignup={auth.signup}
+        />
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      </>
+    );
+  }
 
   const activeActionError =
     expensesState.actionError ||
     budgetsState.actionError ||
-    accountsState.actionError;
+    rulesState.actionError;
 
   const dismissActionError = () => {
     expensesState.clearActionError();
     budgetsState.clearActionError();
-    accountsState.clearActionError();
+    rulesState.clearActionError();
+  };
+
+  const handleSelectView = (view: WorkspaceView) => {
+    setSelectedExpenseId(null);
+    setActiveView(view);
   };
 
   const handleExecuteAction = (messageId: string, action: SuggestedAction) => {
@@ -67,33 +124,29 @@ export default function App() {
       action.category &&
       typeof action.amountCents === "number"
     ) {
-      void budgetsState.updateBudgetLimit(action.category, action.amountCents);
-    } else if (action.type === "pause_subscription" && action.subscriptionId) {
-      void budgetsState.toggleSubscription(action.subscriptionId);
+      void budgetsState.updateBudgetLimit(
+        action.category,
+        action.amountCents,
+        80
+      );
     } else if (action.type === "navigate" && action.view) {
-      setActiveView(action.view);
+      handleSelectView(action.view);
     }
     aiState.markActionApplied(messageId, action.id);
   };
 
-  const handleAskAI = (prompt: string) => {
-    if (!copilotOpenDesktop) setCopilotOpenDesktop(true);
-    if (window.innerWidth < 1280) setCopilotDrawerOpen(true);
-    void aiState.sendMessage(prompt);
-  };
-
-  const pendingCount = expensesState.expenses.filter(
-    (t) => t.category === "Sem categoria" || t.status === "Revisão pendente"
-  ).length;
+  const pendingCount =
+    dashboardState.data?.pendingCount ??
+    expensesState.expenses.filter((t) => t.status === "needs_review").length;
 
   return (
     <div className="min-h-screen flex bg-[#F8FAFC] dark:bg-[#0b0f19] text-[#0F172A] dark:text-[#dfe2f1]">
       <SidebarNav
         activeView={activeView}
-        onSelectView={setActiveView}
+        onSelectView={handleSelectView}
         pendingCount={pendingCount}
-        user={summaryState.data?.user}
-        apiHealthy={apiHealthy}
+        user={auth.user}
+        onLogout={() => void auth.logout()}
         onOpenNewEntry={() => setNewEntryModalOpen(true)}
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
@@ -131,72 +184,96 @@ export default function App() {
             </div>
           )}
 
-          {activeView === "overview" && (
-            <OverviewView
-              summary={summaryState.data}
-              summaryLoading={summaryState.loading}
-              summaryError={summaryState.error}
-              onRetrySummary={() => void summaryState.refetch()}
-              expenses={expensesState.expenses}
-              expensesLoading={expensesState.loading}
-              expensesError={expensesState.error}
-              onRetryExpenses={() => void expensesState.refetch()}
-              budgets={budgetsState.budgets}
-              budgetsLoading={budgetsState.loading}
-              budgetsError={budgetsState.error}
-              onRetryBudgets={() => void budgetsState.refetch()}
-              isCategorizing={expensesState.mutating}
-              onCategorizePending={() => void expensesState.categorizePending()}
-              onOpenNewEntry={() => setNewEntryModalOpen(true)}
-              onNavigate={setActiveView}
-              onAskAI={handleAskAI}
+          {selectedExpenseId ? (
+            <ExpenseDetailView
+              expenseId={selectedExpenseId}
+              onClose={() => setSelectedExpenseId(null)}
+              onUpdate={expensesState.updateExpense}
+              onDelete={expensesState.deleteExpense}
             />
-          )}
+          ) : (
+            <>
+              {activeView === "overview" && (
+                <OverviewView
+                  month={dashboardState.month}
+                  onChangeMonth={dashboardState.setMonth}
+                  onPrevMonth={dashboardState.prevMonth}
+                  onNextMonth={dashboardState.nextMonth}
+                  dashboard={dashboardState.data}
+                  loading={dashboardState.loading}
+                  error={dashboardState.error}
+                  onRetry={() => void dashboardState.refetch()}
+                  insights={dashboardState.insights}
+                  insightsEmpty={dashboardState.insightsEmpty}
+                  insightsLoading={dashboardState.insightsLoading}
+                  isCategorizing={expensesState.mutating}
+                  onCategorizePending={() =>
+                    void expensesState.categorizePending()
+                  }
+                  onOpenNewEntry={() => setNewEntryModalOpen(true)}
+                  onSelectExpense={(id) => setSelectedExpenseId(id)}
+                  onNavigate={handleSelectView}
+                />
+              )}
 
-          {activeView === "transactions" && (
-            <TransactionsView
-              expenses={expensesState.expenses}
-              loading={expensesState.loading}
-              error={expensesState.error}
-              onRetry={() => void expensesState.refetch()}
-              accounts={accountsState.accounts}
-              isCategorizing={expensesState.mutating}
-              onCategorizePending={() => void expensesState.categorizePending()}
-              onUpdateCategory={(id, cat) =>
-                void expensesState.updateCategory(id, cat)
-              }
-              onDeleteExpense={(id) => void expensesState.deleteExpense(id)}
-              onOpenNewEntry={() => setNewEntryModalOpen(true)}
-            />
-          )}
+              {activeView === "transactions" && (
+                <TransactionsView
+                  expenses={expensesState.expenses}
+                  filters={expensesState.filters}
+                  onChangeFilters={expensesState.setFilters}
+                  onResetFilters={expensesState.resetFilters}
+                  hasMore={expensesState.hasMore}
+                  totalCount={expensesState.totalCount}
+                  loading={expensesState.loading}
+                  loadingMore={expensesState.loadingMore}
+                  error={expensesState.error}
+                  onRetry={() => void expensesState.refetch()}
+                  onLoadMore={() => void expensesState.loadMore()}
+                  isCategorizing={expensesState.mutating}
+                  onCategorizePending={() =>
+                    void expensesState.categorizePending()
+                  }
+                  onUpdateCategory={(id, cat) =>
+                    void expensesState.updateCategory(id, cat)
+                  }
+                  onDeleteExpense={expensesState.deleteExpense}
+                  onSelectExpense={(id) => setSelectedExpenseId(id)}
+                  onOpenNewEntry={() => setNewEntryModalOpen(true)}
+                  onNotifyError={notifyError}
+                  onNotifySuccess={notifySuccess}
+                />
+              )}
 
-          {activeView === "budgets" && (
-            <BudgetsView
-              budgets={budgetsState.budgets}
-              subscriptions={budgetsState.subscriptions}
-              loading={budgetsState.loading}
-              error={budgetsState.error}
-              onRetry={() => void budgetsState.refetch()}
-              summary={summaryState.data}
-              onUpdateBudgetLimit={(cat, cents) =>
-                void budgetsState.updateBudgetLimit(cat, cents)
-              }
-              onToggleSubscription={(id) =>
-                void budgetsState.toggleSubscription(id)
-              }
-            />
-          )}
+              {activeView === "budgets" && (
+                <BudgetsView
+                  budgets={budgetsState.budgets}
+                  loading={budgetsState.loading}
+                  error={budgetsState.error}
+                  onRetry={() => void budgetsState.refetch()}
+                  dashboard={dashboardState.data}
+                  onUpdateBudgetLimit={(cat, cents, alertPct) =>
+                    budgetsState.updateBudgetLimit(cat, cents, alertPct)
+                  }
+                  onNotifySuccess={notifySuccess}
+                  onNotifyError={notifyError}
+                />
+              )}
 
-          {activeView === "accounts" && (
-            <AccountsView
-              accounts={accountsState.accounts}
-              loading={accountsState.loading}
-              syncing={accountsState.syncing}
-              error={accountsState.error}
-              onRetry={() => void accountsState.refetch()}
-              onSyncAccounts={() => void accountsState.syncAccounts()}
-              onTransfer={accountsState.transferAccounts}
-            />
+              {activeView === "rules" && (
+                <RulesView
+                  user={auth.user}
+                  rules={rulesState.rules}
+                  loading={rulesState.loading}
+                  error={rulesState.error}
+                  onRetry={() => void rulesState.refetch()}
+                  onDeleteRule={(norm) => void rulesState.deleteRule(norm)}
+                  onLogout={() => void auth.logout()}
+                  onDeleteAccount={auth.deleteAccount}
+                  onNotifySuccess={notifySuccess}
+                  onNotifyError={notifyError}
+                />
+              )}
+            </>
           )}
         </main>
       </div>
@@ -204,14 +281,14 @@ export default function App() {
       <AICopilotRail
         messages={aiState.messages}
         isThinking={aiState.isThinking}
-        briefing={aiState.briefing}
-        isBriefingLoading={aiState.isBriefingLoading}
-        briefingError={aiState.briefingError}
         chatError={aiState.chatError}
         onClearChatError={aiState.clearChatError}
-        onRefreshBriefing={() => void aiState.refreshBriefing()}
         onSendMessage={(text) => void aiState.sendMessage(text)}
         onExecuteAction={handleExecuteAction}
+        onSelectExpense={(id) => {
+          setSelectedExpenseId(id);
+          setCopilotDrawerOpen(false);
+        }}
         desktopOpen={copilotOpenDesktop}
         mobileDrawerOpen={copilotDrawerOpen}
         onCloseMobileDrawer={() => setCopilotDrawerOpen(false)}
@@ -220,12 +297,18 @@ export default function App() {
       <AddTransactionModal
         open={newEntryModalOpen}
         onClose={() => setNewEntryModalOpen(false)}
-        accounts={accountsState.accounts}
         submitting={expensesState.mutating}
         onSubmitExpense={async (input) => {
           await expensesState.createExpense(input);
         }}
+        onConfirmExpense={async (input) => {
+          await expensesState.confirmExpense(input);
+        }}
+        onNotifySuccess={notifySuccess}
+        onNotifyError={notifyError}
       />
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

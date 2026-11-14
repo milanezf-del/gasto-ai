@@ -1,57 +1,74 @@
 import React from "react";
-import { AlertTriangle, CheckCircle2, Pause, Play } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Save } from "lucide-react";
 import type {
   BudgetEnvelope,
+  DashboardData,
   ExpenseCategory,
-  FinancialSummary,
-  SubscriptionItem,
 } from "../types/finance";
 import {
   CATEGORY_META,
+  centavosToReaisInput,
   formatCentavos,
-  formatDateBR,
+  reaisInputToCentavos,
 } from "../utils/formatters";
-import {
-  CardSkeleton,
-  EmptyState,
-  ErrorState,
-  TableSkeleton,
-} from "./StateNotice";
+import { CardSkeleton, EmptyState, ErrorState } from "./StateNotice";
 
 interface BudgetsViewProps {
   budgets: BudgetEnvelope[];
-  subscriptions: SubscriptionItem[];
   loading: boolean;
   error: string | null;
   onRetry: () => void;
-  summary: FinancialSummary | null;
+  dashboard: DashboardData | null;
   onUpdateBudgetLimit: (
     category: ExpenseCategory,
-    newLimitCents: number
-  ) => void;
-  onToggleSubscription: (id: string) => void;
+    limitCents: number,
+    alertPercent: number
+  ) => Promise<void> | void;
+  onNotifySuccess?: (message: string) => void;
+  onNotifyError?: (message: string) => void;
 }
 
 export const BudgetsView: React.FC<BudgetsViewProps> = ({
   budgets,
-  subscriptions,
   loading,
   error,
   onRetry,
-  summary,
+  dashboard,
   onUpdateBudgetLimit,
-  onToggleSubscription,
+  onNotifySuccess,
+  onNotifyError,
 }) => {
   const [monthlyContributionCents, setMonthlyContributionCents] =
-    React.useState(100000); // R$ 1.000,00 padrão apenas para controle local do simulador
+    React.useState(100000);
   const [annualYieldPct, setAnnualYieldPct] = React.useState(10.5);
 
-  const currentNetWorthCents = summary?.netWorthCents ?? 0;
+  const [draftLimits, setDraftLimits] = React.useState<Record<string, string>>(
+    {}
+  );
+  const [draftAlerts, setDraftAlerts] = React.useState<Record<string, string>>(
+    {}
+  );
+  const [savingCategory, setSavingCategory] =
+    React.useState<ExpenseCategory | null>(null);
+
+  React.useEffect(() => {
+    const nextLimits: Record<string, string> = {};
+    const nextAlerts: Record<string, string> = {};
+    for (const b of budgets) {
+      nextLimits[b.category] =
+        b.limitCents > 0 ? centavosToReaisInput(b.limitCents) : "0,00";
+      nextAlerts[b.category] = String(b.alertPercent ?? 80);
+    }
+    setDraftLimits(nextLimits);
+    setDraftAlerts(nextAlerts);
+  }, [budgets]);
+
+  const baseSurplusCents = Math.max(dashboard?.netSurplusCents ?? 0, 0);
 
   const projection = React.useMemo(() => {
     const monthlyRate = annualYieldPct / 100 / 12;
     const projectMonths = (months: number) => {
-      let balance = currentNetWorthCents;
+      let balance = baseSurplusCents;
       for (let i = 0; i < months; i++) {
         balance = Math.round(
           balance * (1 + monthlyRate) + monthlyContributionCents
@@ -63,21 +80,43 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
       oneYearCents: projectMonths(12),
       threeYearsCents: projectMonths(36),
     };
-  }, [currentNetWorthCents, monthlyContributionCents, annualYieldPct]);
+  }, [baseSurplusCents, monthlyContributionCents, annualYieldPct]);
 
-  const activeSubscriptionBurnCents = subscriptions
-    .filter((s) => s.status !== "Pausada")
-    .reduce((sum, s) => sum + s.amountCents, 0);
+  const handleSaveCategory = async (category: ExpenseCategory) => {
+    const rawLimit = (draftLimits[category] ?? "0").trim();
+    const limitCents =
+      rawLimit === "0" || rawLimit === "0,00" || rawLimit === "0.00"
+        ? 0
+        : reaisInputToCentavos(rawLimit);
+
+    if (limitCents === null) {
+      onNotifyError?.("Informe um limite válido em reais (ex.: 800,00).");
+      return;
+    }
+
+    const parsedAlert = Math.round(Number(draftAlerts[category] ?? "80"));
+    if (!Number.isFinite(parsedAlert) || parsedAlert < 1 || parsedAlert > 100) {
+      onNotifyError?.("O percentual de alerta deve ficar entre 1% e 100%.");
+      return;
+    }
+
+    setSavingCategory(category);
+    try {
+      await onUpdateBudgetLimit(category, limitCents, parsedAlert);
+      onNotifySuccess?.(`Orçamento de ${category} atualizado.`);
+    } catch {
+      // Erro tratado pelo hook
+    } finally {
+      setSavingCategory(null);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          <CardSkeleton lines={3} />
-          <CardSkeleton lines={3} />
-          <CardSkeleton lines={3} />
-        </div>
-        <TableSkeleton rows={4} />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <CardSkeleton lines={3} />
+        <CardSkeleton lines={3} />
+        <CardSkeleton lines={3} />
       </div>
     );
   }
@@ -85,7 +124,7 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
   if (error) {
     return (
       <ErrorState
-        title="Não foi possível carregar orçamentos e assinaturas"
+        title="Não foi possível carregar os orçamentos"
         message={error}
         onRetry={onRetry}
       />
@@ -94,22 +133,21 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Editable Budget Envelopes */}
       <section className="rounded-xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-white/[0.08] p-5 sm:p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.04)] dark:shadow-none">
         <div className="pb-4 border-b border-slate-100 dark:border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-display text-base font-semibold text-[#0F172A] dark:text-[#dfe2f1]">
-              Tetos Mensais por Categoria
+              Tetos Mensais e Alertas por Categoria
             </h2>
             <p className="text-xs text-slate-500 dark:text-[#908f9e] mt-0.5">
-              Ajuste limites mensais em centavos em tempo real
+              Configure o limite em reais e o percentual de aviso (padrão 80%)
             </p>
           </div>
           <div className="text-xs font-mono tabular-nums text-slate-500 dark:text-[#908f9e]">
             Teto Total:{" "}
             <span className="font-semibold text-[#0F172A] dark:text-[#dfe2f1]">
               {formatCentavos(
-                budgets.reduce((s, b) => s + b.monthlyLimitCents, 0)
+                budgets.reduce((s, b) => s + b.limitCents, 0)
               )}
             </span>
           </div>
@@ -118,21 +156,24 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
         {budgets.length === 0 ? (
           <div className="pt-5">
             <EmptyState
-              title="Nenhum envelope de orçamento configurado"
-              description="Quando os orçamentos forem criados na API, você poderá ajustar os limites por categoria aqui."
+              title="Nenhum orçamento disponível"
+              description="Defina limites para suas categorias de despesa."
             />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 pt-5">
             {budgets.map((env) => {
               const pct =
-                env.monthlyLimitCents > 0
-                  ? (env.spentCents / env.monthlyLimitCents) * 100
+                env.limitCents > 0
+                  ? (env.spentCents / env.limitCents) * 100
                   : 0;
-              const remainingCents = env.monthlyLimitCents - env.spentCents;
+              const remainingCents = env.limitCents - env.spentCents;
               const meta = CATEGORY_META[env.category];
-              const isOver = pct > 100;
-              const isWarn = pct >= 80 && pct <= 100;
+              const isOver = env.limitCents > 0 && pct > 100;
+              const isWarn =
+                env.limitCents > 0 &&
+                pct >= env.alertPercent &&
+                pct <= 100;
 
               return (
                 <div
@@ -150,8 +191,10 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
                       </span>
                     </div>
                     <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${
-                        isOver
+                      className={`inline-flex items-center gap-1 text-[11px] font-semibold whitespace-nowrap ${
+                        env.limitCents === 0
+                          ? "text-slate-400 dark:text-[#767586]"
+                          : isOver
                           ? "text-[#F43F5E]"
                           : isWarn
                           ? "text-[#D97706] dark:text-[#f59e0b]"
@@ -161,11 +204,13 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
                       {isOver || isWarn ? (
                         <AlertTriangle className="w-3 h-3" />
                       ) : (
-                        <CheckCircle2 className="w-3 h-3" />
+                        <CheckCircle2 className="w-3 h-3 text-[#10B981]" />
                       )}
                       <span>
-                        {isOver
-                          ? "Excedido"
+                        {env.limitCents === 0
+                          ? "Sem teto"
+                          : isOver
+                          ? "Estourado"
                           : isWarn
                           ? "Alerta"
                           : "No esperado"}
@@ -196,48 +241,105 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
                     </span>
                     <span
                       className={`font-mono ${
-                        remainingCents < 0
+                        env.limitCents > 0 && remainingCents < 0
                           ? "text-[#F43F5E]"
                           : "text-slate-500 dark:text-[#908f9e]"
                       }`}
                     >
-                      {remainingCents >= 0
+                      {env.limitCents === 0
+                        ? "Defina um teto"
+                        : remainingCents >= 0
                         ? `${formatCentavos(remainingCents)} restante`
-                        : `${formatCentavos(Math.abs(remainingCents))} excedido`}
+                        : `${formatCentavos(Math.abs(remainingCents))} estourado`}
                     </span>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200/70 dark:border-white/[0.06] flex items-center justify-between gap-2">
-                    <label className="text-[11px] font-medium text-slate-500 dark:text-[#908f9e]">
-                      Limite Mensal
-                    </label>
-                    <div className="flex items-center gap-1.5">
+                  <div className="pt-3 border-t border-slate-200/70 dark:border-white/[0.06] space-y-2.5">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-[11px] font-medium text-slate-500 dark:text-[#908f9e] mb-1">
+                          Limite (R$)
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={draftLimits[env.category] ?? ""}
+                          onChange={(e) =>
+                            setDraftLimits((prev) => ({
+                              ...prev,
+                              [env.category]: e.target.value,
+                            }))
+                          }
+                          aria-label={`Limite mensal de ${env.category}`}
+                          className="w-full h-8 px-2.5 rounded-md bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/[0.1] text-xs font-mono text-[#0F172A] dark:text-[#dfe2f1]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-500 dark:text-[#908f9e] mb-1">
+                          Alerta (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={draftAlerts[env.category] ?? "80"}
+                          onChange={(e) =>
+                            setDraftAlerts((prev) => ({
+                              ...prev,
+                              [env.category]: e.target.value,
+                            }))
+                          }
+                          aria-label={`Percentual de alerta de ${env.category}`}
+                          className="w-full h-8 px-2 rounded-md bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/[0.1] text-xs font-mono text-[#0F172A] dark:text-[#dfe2f1]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void onUpdateBudgetLimit(
+                              env.category,
+                              Math.max(0, env.limitCents - 10000),
+                              env.alertPercent
+                            )
+                          }
+                          aria-label={`Diminuir R$ 100 em ${env.category}`}
+                          className="h-7 px-2 rounded-md text-[11px] font-mono bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/[0.1] hover:border-[#6366F1] cursor-pointer"
+                        >
+                          -100
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void onUpdateBudgetLimit(
+                              env.category,
+                              env.limitCents + 10000,
+                              env.alertPercent
+                            )
+                          }
+                          aria-label={`Aumentar R$ 100 em ${env.category}`}
+                          className="h-7 px-2 rounded-md text-[11px] font-mono bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/[0.1] hover:border-[#6366F1] cursor-pointer"
+                        >
+                          +100
+                        </button>
+                      </div>
+
                       <button
                         type="button"
-                        onClick={() =>
-                          onUpdateBudgetLimit(
-                            env.category,
-                            Math.max(10000, env.monthlyLimitCents - 10000)
-                          )
-                        }
-                        className="w-7 h-7 rounded-md text-xs font-mono bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/[0.1] hover:border-[#6366F1] cursor-pointer"
+                        disabled={savingCategory === env.category}
+                        onClick={() => void handleSaveCategory(env.category)}
+                        className="h-7 px-3 rounded-md inline-flex items-center gap-1 text-[11px] font-semibold bg-[#6366F1] hover:bg-[#4F46E5] text-white dark:bg-[#818cf8] dark:text-[#0b0f19] disabled:opacity-50 cursor-pointer"
                       >
-                        -
-                      </button>
-                      <span className="w-24 text-center text-xs font-mono tabular-nums font-semibold text-[#0F172A] dark:text-[#dfe2f1]">
-                        {formatCentavos(env.monthlyLimitCents)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateBudgetLimit(
-                            env.category,
-                            env.monthlyLimitCents + 10000
-                          )
-                        }
-                        className="w-7 h-7 rounded-md text-xs font-mono bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/[0.1] hover:border-[#6366F1] cursor-pointer"
-                      >
-                        +
+                        <Save className="w-3 h-3" />
+                        <span>
+                          {savingCategory === env.category
+                            ? "Salvando..."
+                            : "Salvar"}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -248,163 +350,68 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
         )}
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Recurring Subscriptions Monitor */}
-        <section className="lg:col-span-7 rounded-xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-white/[0.08] overflow-hidden shadow-[0_1px_3px_0_rgba(15,23,42,0.04)] dark:shadow-none">
-          <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
-            <div>
-              <h2 className="font-display text-base font-semibold text-[#0F172A] dark:text-[#dfe2f1]">
-                Assinaturas Recorrentes
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-[#908f9e] mt-0.5">
-                Comprometimento mensal ativo:{" "}
-                <span className="font-mono font-semibold text-[#0F172A] dark:text-[#dfe2f1]">
-                  {formatCentavos(activeSubscriptionBurnCents)}/mês
-                </span>
-              </p>
-            </div>
-          </div>
-
-          {subscriptions.length === 0 ? (
-            <div className="p-5">
-              <EmptyState
-                title="Nenhuma assinatura monitorada"
-                description="Assinaturas recorrentes identificadas nos seus extratos serão listadas aqui."
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100 dark:divide-white/[0.05]">
-              {subscriptions.map((sub) => {
-                const isPaused = sub.status === "Pausada";
-                const isUnused = sub.status === "Pouco usada";
-
-                return (
-                  <div
-                    key={sub.id}
-                    className="px-5 sm:px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-[#171b26]/70 transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-sm font-medium truncate ${
-                            isPaused
-                              ? "line-through text-slate-400 dark:text-[#767586]"
-                              : "text-[#0F172A] dark:text-[#dfe2f1]"
-                          }`}
-                        >
-                          {sub.name}
-                        </span>
-                        <span
-                          className={`text-[11px] font-medium whitespace-nowrap ${
-                            isPaused
-                              ? "text-slate-400 dark:text-[#767586]"
-                              : isUnused
-                              ? "text-[#D97706] dark:text-[#f59e0b]"
-                              : "text-[#10B981]"
-                          }`}
-                        >
-                          · {sub.status}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-[#908f9e] mt-0.5">
-                        {sub.vendor} · Renova em {formatDateBR(sub.renewalDate)} ·
-                        Último uso{" "}
-                        {sub.lastUsedDaysAgo === 0
-                          ? "hoje"
-                          : `há ${sub.lastUsedDaysAgo}d`}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 shrink-0">
-                      <span className="font-mono text-sm font-semibold tabular-nums text-[#0F172A] dark:text-[#dfe2f1] whitespace-nowrap">
-                        {formatCentavos(sub.amountCents)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onToggleSubscription(sub.id)}
-                        className={`h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
-                          isPaused
-                            ? "bg-[#10B981]/10 text-[#10B981] hover:bg-[#10B981]/20"
-                            : "bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-[#1e293b] dark:hover:bg-[#262a35] dark:text-[#c6c5d5]"
-                        }`}
-                      >
-                        {isPaused ? (
-                          <>
-                            <Play className="w-3 h-3" />
-                            <span>Reativar</span>
-                          </>
-                        ) : (
-                          <>
-                            <Pause className="w-3 h-3" />
-                            <span>Pausar</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Compounding Wealth Simulator */}
-        <section className="lg:col-span-5 rounded-xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-white/[0.08] p-5 sm:p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.04)] dark:shadow-none flex flex-col justify-between">
+      {/* Simulador de Reserva e Aporte */}
+      <section className="rounded-xl bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-white/[0.08] p-5 sm:p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.04)] dark:shadow-none">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/[0.06]">
           <div>
             <h2 className="font-display text-base font-semibold text-[#0F172A] dark:text-[#dfe2f1]">
-              Simulador de Acúmulo
+              Simulador de Reserva e Aporte
             </h2>
             <p className="text-xs text-slate-500 dark:text-[#908f9e] mt-0.5">
-              Projeção a partir da base atual de{" "}
-              {formatCentavos(currentNetWorthCents)}
+              Projeção a partir do saldo mensal atual de{" "}
+              {formatCentavos(baseSurplusCents)}
             </p>
+          </div>
+        </div>
 
-            <div className="mt-6 space-y-5">
-              <div>
-                <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="font-medium text-slate-600 dark:text-[#c6c5d5]">
-                    Aporte Mensal Simulado
-                  </span>
-                  <span className="font-mono font-semibold tabular-nums text-[#0F172A] dark:text-[#dfe2f1]">
-                    {formatCentavos(monthlyContributionCents)}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={25000}
-                  max={2000000}
-                  step={25000}
-                  value={monthlyContributionCents}
-                  onChange={(e) =>
-                    setMonthlyContributionCents(Number(e.target.value))
-                  }
-                  className="w-full accent-[#6366F1] dark:accent-[#818cf8] cursor-pointer"
-                />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-5 items-center">
+          <div className="space-y-5">
+            <div>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="font-medium text-slate-600 dark:text-[#c6c5d5]">
+                  Aporte Mensal Simulado
+                </span>
+                <span className="font-mono font-semibold tabular-nums text-[#0F172A] dark:text-[#dfe2f1]">
+                  {formatCentavos(monthlyContributionCents)}
+                </span>
               </div>
+              <input
+                type="range"
+                min={25000}
+                max={2000000}
+                step={25000}
+                value={monthlyContributionCents}
+                onChange={(e) =>
+                  setMonthlyContributionCents(Number(e.target.value))
+                }
+                aria-label="Aporte Mensal Simulado"
+                className="w-full accent-[#6366F1] dark:accent-[#818cf8] cursor-pointer"
+              />
+            </div>
 
-              <div>
-                <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="font-medium text-slate-600 dark:text-[#c6c5d5]">
-                    Rentabilidade Anual Esperada
-                  </span>
-                  <span className="font-mono font-semibold tabular-nums text-[#0F172A] dark:text-[#dfe2f1]">
-                    {annualYieldPct.toFixed(1).replace(".", ",")}% a.a.
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={4}
-                  max={18}
-                  step={0.5}
-                  value={annualYieldPct}
-                  onChange={(e) => setAnnualYieldPct(Number(e.target.value))}
-                  className="w-full accent-[#6366F1] dark:accent-[#818cf8] cursor-pointer"
-                />
+            <div>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="font-medium text-slate-600 dark:text-[#c6c5d5]">
+                  Rentabilidade Anual Esperada
+                </span>
+                <span className="font-mono font-semibold tabular-nums text-[#0F172A] dark:text-[#dfe2f1]">
+                  {annualYieldPct.toFixed(1).replace(".", ",")}% a.a.
+                </span>
               </div>
+              <input
+                type="range"
+                min={4}
+                max={18}
+                step={0.5}
+                value={annualYieldPct}
+                onChange={(e) => setAnnualYieldPct(Number(e.target.value))}
+                aria-label="Rentabilidade Anual Esperada"
+                className="w-full accent-[#6366F1] dark:accent-[#818cf8] cursor-pointer"
+              />
             </div>
           </div>
 
-          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-white/[0.06] grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-slate-50/70 dark:bg-[#171b26] border border-slate-200/70 dark:border-white/[0.06]">
             <div>
               <div className="text-xs text-slate-500 dark:text-[#908f9e]">
                 Projeção 12 Meses
@@ -422,8 +429,8 @@ export const BudgetsView: React.FC<BudgetsViewProps> = ({
               </div>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   );
 };

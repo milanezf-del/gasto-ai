@@ -1,52 +1,57 @@
 import React from "react";
 import { api, ApiError } from "../lib/api";
-import type {
-  BudgetEnvelope,
-  ExpenseCategory,
-  SubscriptionItem,
-} from "../types/finance";
+import type { BudgetEnvelope, ExpenseCategory } from "../types/finance";
 
-export function useBudgets() {
+export function useBudgets(enabled: boolean, onDataChanged?: () => void) {
   const [budgets, setBudgets] = React.useState<BudgetEnvelope[]>([]);
-  const [subscriptions, setSubscriptions] = React.useState<SubscriptionItem[]>(
-    []
-  );
-  const [loading, setLoading] = React.useState<boolean>(true);
+  const [loading, setLoading] = React.useState<boolean>(enabled);
   const [error, setError] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
 
   const refetch = React.useCallback(async () => {
+    if (!enabled) {
+      setBudgets([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const res = await api.getBudgets();
       setBudgets(res.budgets ?? []);
-      setSubscriptions(res.subscriptions ?? []);
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Não foi possível carregar os orçamentos e assinaturas."
+          : "Não foi possível carregar os orçamentos."
       );
       setBudgets([]);
-      setSubscriptions([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   React.useEffect(() => {
     void refetch();
   }, [refetch]);
 
   const updateBudgetLimit = React.useCallback(
-    async (category: ExpenseCategory, monthlyLimitCents: number) => {
+    async (
+      category: ExpenseCategory,
+      limitCents: number,
+      alertPercent = 80
+    ) => {
       setActionError(null);
       try {
-        const res = await api.updateBudgetLimit(category, monthlyLimitCents);
+        const res = await api.updateBudgetLimit(
+          category,
+          limitCents,
+          alertPercent
+        );
         setBudgets((prev) =>
           prev.map((b) => (b.category === category ? res.budget : b))
         );
+        onDataChanged?.();
       } catch (err) {
         setActionError(
           err instanceof ApiError
@@ -55,34 +60,16 @@ export function useBudgets() {
         );
       }
     },
-    []
+    [onDataChanged]
   );
-
-  const toggleSubscription = React.useCallback(async (id: string) => {
-    setActionError(null);
-    try {
-      const res = await api.toggleSubscription(id);
-      setSubscriptions((prev) =>
-        prev.map((s) => (s.id === id ? res.subscription : s))
-      );
-    } catch (err) {
-      setActionError(
-        err instanceof ApiError
-          ? err.message
-          : "Não foi possível alterar o status da assinatura."
-      );
-    }
-  }, []);
 
   return {
     budgets,
-    subscriptions,
     loading,
     error,
     actionError,
     clearActionError: () => setActionError(null),
     refetch,
     updateBudgetLimit,
-    toggleSubscription,
   };
 }

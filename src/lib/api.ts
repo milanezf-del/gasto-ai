@@ -1,33 +1,52 @@
 import type {
-  AiBriefing,
+  AssistantCardItem,
+  AssistantMiniSeriesPoint,
+  AuthUser,
   BudgetEnvelope,
   ChatMessage,
+  DashboardData,
   ExpenseCategory,
   ExpenseItem,
-  FinancialAccount,
-  FinancialSummary,
-  SubscriptionItem,
+  ExpenseListFilters,
+  ExpenseListResponse,
+  InsightsResponse,
+  MerchantRuleItem,
+  ParseImageItemResult,
+  ParsedExpenseDraft,
   SuggestedAction,
-  TransactionCategory,
 } from "../types/finance";
 import {
   aiChatInputSchema,
+  confirmExpenseInputSchema,
   createExpenseSchema,
-  transferAccountsSchema,
+  loginInputSchema,
+  parseTextInputSchema,
+  signupInputSchema,
   updateBudgetLimitSchema,
+  updateExpenseSchema,
+  type ConfirmExpenseInput,
   type CreateExpenseInput,
-  type TransferAccountsInput,
+  type LoginInput,
+  type SignupInput,
+  type UpdateExpenseInput,
 } from "./schemas";
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
   details?: unknown;
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    details?: unknown,
+    code?: string
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -42,10 +61,13 @@ function defaultErrorMessageForStatus(status: number): string {
     return "Você não tem permissão para executar esta operação.";
   }
   if (status === 404) {
-    return "Este recurso ainda não está disponível na API.";
+    return "Recurso não encontrado na API.";
   }
   if (status === 429) {
-    return "Muitas requisições em sequência. Aguarde alguns instantes e tente novamente.";
+    return "Limite de requisições atingido. Tente novamente em instantes.";
+  }
+  if (status === 503) {
+    return "Serviço temporariamente indisponível.";
   }
   if (status >= 500) {
     return "O servidor encontrou um problema temporário. Tente novamente em instantes.";
@@ -58,7 +80,9 @@ export async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  if (options.body && !headers.has("Content-Type")) {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -72,7 +96,9 @@ export async function apiFetch<T>(
   } catch {
     throw new ApiError(
       "Sem conexão com o servidor. Verifique sua internet e tente novamente.",
-      0
+      0,
+      undefined,
+      "NETWORK_ERROR"
     );
   }
 
@@ -87,41 +113,103 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok) {
+    const bodyObj =
+      parsedBody && typeof parsedBody === "object"
+        ? (parsedBody as { error?: unknown; message?: unknown; code?: unknown })
+        : null;
+
     const serverMessage =
-      parsedBody &&
-      typeof parsedBody === "object" &&
-      "error" in parsedBody &&
-      typeof (parsedBody as { error?: unknown }).error === "string"
-        ? (parsedBody as { error: string }).error
+      typeof bodyObj?.error === "string"
+        ? bodyObj.error
+        : typeof bodyObj?.message === "string"
+        ? bodyObj.message
         : defaultErrorMessageForStatus(response.status);
 
-    throw new ApiError(serverMessage, response.status, parsedBody);
+    const code = typeof bodyObj?.code === "string" ? bodyObj.code : undefined;
+    throw new ApiError(serverMessage, response.status, parsedBody, code);
   }
 
   return parsedBody as T;
 }
 
+function buildExpensesQueryString(filters?: ExpenseListFilters): string {
+  if (!filters) return "";
+  const qs = new URLSearchParams();
+  if (filters.from) qs.set("from", filters.from);
+  if (filters.to) qs.set("to", filters.to);
+  if (filters.category && filters.category !== "all") {
+    qs.set("category", filters.category);
+  }
+  if (filters.q?.trim()) qs.set("q", filters.q.trim());
+  if (typeof filters.minCents === "number" && filters.minCents > 0) {
+    qs.set("min", String(filters.minCents));
+  }
+  if (typeof filters.maxCents === "number" && filters.maxCents > 0) {
+    qs.set("max", String(filters.maxCents));
+  }
+  if (filters.status && filters.status !== "all") {
+    qs.set("status", filters.status);
+  }
+  if (filters.sort) qs.set("sort", filters.sort);
+  if (filters.limit) qs.set("limit", String(filters.limit));
+  if (filters.cursor) qs.set("cursor", filters.cursor);
+  const str = qs.toString();
+  return str ? `?${str}` : "";
+}
+
 export const api = {
-  health: () => apiFetch<{ ok: boolean }>("/api/health"),
+  health: () =>
+    apiFetch<{ ok: boolean; database: string; configured: boolean }>(
+      "/api/health"
+    ),
 
-  getSummary: () => apiFetch<FinancialSummary>("/api/summary"),
+  me: () => apiFetch<{ ok: boolean; user: AuthUser }>("/api/auth/me"),
 
-  getExpenses: (params?: {
-    search?: string;
-    category?: string;
-    type?: string;
-  }) => {
-    const qs = new URLSearchParams();
-    if (params?.search) qs.set("search", params.search);
-    if (params?.category && params.category !== "all") {
-      qs.set("category", params.category);
-    }
-    if (params?.type && params.type !== "all") qs.set("type", params.type);
-    const query = qs.toString();
-    return apiFetch<{ items: ExpenseItem[] }>(
-      `/api/expenses${query ? `?${query}` : ""}`
-    );
+  login: (input: LoginInput) => {
+    const validated = loginInputSchema.parse(input);
+    return apiFetch<{ ok: boolean; user: AuthUser }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(validated),
+    });
   },
+
+  signup: (input: SignupInput) => {
+    const validated = signupInputSchema.parse(input);
+    return apiFetch<{
+      ok: boolean;
+      requiresEmailConfirmation: boolean;
+      user: AuthUser | null;
+    }>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(validated),
+    });
+  },
+
+  logout: () => apiFetch<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
+  deleteAccount: (confirmation: string) =>
+    apiFetch<{ ok: boolean }>("/api/account", {
+      method: "DELETE",
+      body: JSON.stringify({ confirmation }),
+    }),
+
+  getDashboard: (month?: string) =>
+    apiFetch<DashboardData>(
+      `/api/dashboard${month ? `?month=${encodeURIComponent(month)}` : ""}`
+    ),
+
+  getInsights: (month?: string) =>
+    apiFetch<InsightsResponse>(
+      `/api/insights${month ? `?month=${encodeURIComponent(month)}` : ""}`
+    ),
+
+  getExpenses: (filters?: ExpenseListFilters) =>
+    apiFetch<ExpenseListResponse>(
+      `/api/expenses${buildExpensesQueryString(filters)}`
+    ),
+
+  getExpenseById: (id: string) =>
+    apiFetch<{ item: ExpenseItem }>(`/api/expenses/${encodeURIComponent(id)}`),
 
   createExpense: (input: CreateExpenseInput) => {
     const validated = createExpenseSchema.parse(input);
@@ -131,10 +219,29 @@ export const api = {
     });
   },
 
-  updateExpenseCategory: (id: string, category: TransactionCategory) =>
+  confirmExpense: (input: ConfirmExpenseInput) => {
+    const validated = confirmExpenseInputSchema.parse(input);
+    return apiFetch<{ item: ExpenseItem }>("/api/expenses/confirm", {
+      method: "POST",
+      body: JSON.stringify(validated),
+    });
+  },
+
+  updateExpense: (id: string, input: UpdateExpenseInput) => {
+    const validated = updateExpenseSchema.parse(input);
+    return apiFetch<{ item: ExpenseItem }>(
+      `/api/expenses/${encodeURIComponent(id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(validated),
+      }
+    );
+  },
+
+  updateExpenseCategory: (id: string, category: ExpenseCategory) =>
     apiFetch<{ item: ExpenseItem }>(`/api/expenses/${encodeURIComponent(id)}`, {
       method: "PATCH",
-      body: JSON.stringify({ category }),
+      body: JSON.stringify({ category, status: "confirmed" }),
     }),
 
   deleteExpense: (id: string) =>
@@ -142,11 +249,62 @@ export const api = {
       method: "DELETE",
     }),
 
+  downloadExpensesCsv: async (filters?: ExpenseListFilters) => {
+    const qs = buildExpensesQueryString(filters);
+    let response: Response;
+    try {
+      response = await fetch(`/api/expenses/export.csv${qs}`, {
+        credentials: "include",
+      });
+    } catch {
+      throw new ApiError(
+        "Sem conexão ao exportar o arquivo CSV.",
+        0,
+        undefined,
+        "NETWORK_ERROR"
+      );
+    }
+    if (!response.ok) {
+      throw new ApiError(
+        "Não foi possível exportar suas despesas em CSV.",
+        response.status
+      );
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `gasto-despesas.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  parseImages: (files: File[]) => {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("images", file);
+    }
+    return apiFetch<{ results: ParseImageItemResult[] }>("/api/ai/parse-image", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  parseText: (text: string) => {
+    const validated = parseTextInputSchema.parse({ text });
+    return apiFetch<{ draft: ParsedExpenseDraft }>("/api/ai/parse-text", {
+      method: "POST",
+      body: JSON.stringify(validated),
+    });
+  },
+
   categorizePending: (ids: string[]) =>
     apiFetch<{
       results: Array<{
         id: string;
-        category: TransactionCategory;
+        category: ExpenseCategory;
         confidence: number;
         rationale: string;
       }>;
@@ -155,16 +313,20 @@ export const api = {
       body: JSON.stringify({ ids }),
     }),
 
-  getBudgets: () =>
-    apiFetch<{
-      budgets: BudgetEnvelope[];
-      subscriptions: SubscriptionItem[];
-    }>("/api/budgets"),
+  getBudgets: (month?: string) =>
+    apiFetch<{ month: string; budgets: BudgetEnvelope[] }>(
+      `/api/budgets${month ? `?month=${encodeURIComponent(month)}` : ""}`
+    ),
 
-  updateBudgetLimit: (category: ExpenseCategory, monthlyLimitCents: number) => {
+  updateBudgetLimit: (
+    category: ExpenseCategory,
+    limitCents: number,
+    alertPercent = 80
+  ) => {
     const validated = updateBudgetLimitSchema.parse({
       category,
-      monthlyLimitCents,
+      limitCents,
+      alertPercent,
     });
     return apiFetch<{ budget: BudgetEnvelope }>("/api/budgets", {
       method: "PUT",
@@ -172,40 +334,28 @@ export const api = {
     });
   },
 
-  toggleSubscription: (id: string) =>
-    apiFetch<{ subscription: SubscriptionItem }>(
-      `/api/subscriptions/${encodeURIComponent(id)}/toggle`,
-      { method: "PATCH" }
+  getRules: () => apiFetch<{ rules: MerchantRuleItem[] }>("/api/rules"),
+
+  deleteRule: (merchantNorm: string) =>
+    apiFetch<{ ok: boolean }>(
+      `/api/rules/${encodeURIComponent(merchantNorm)}`,
+      { method: "DELETE" }
     ),
 
-  getAccounts: () =>
-    apiFetch<{ accounts: FinancialAccount[] }>("/api/accounts"),
-
-  syncAccounts: () =>
-    apiFetch<{ accounts: FinancialAccount[] }>("/api/accounts/sync", {
-      method: "POST",
-    }),
-
-  transferAccounts: (input: TransferAccountsInput) => {
-    const validated = transferAccountsSchema.parse(input);
-    return apiFetch<{ accounts: FinancialAccount[] }>("/api/accounts/transfer", {
-      method: "POST",
-      body: JSON.stringify(validated),
-    });
-  },
-
-  getBriefing: () => apiFetch<AiBriefing>("/api/ai/briefing"),
-
-  sendAiChat: (
+  askAssistant: (
     message: string,
     history: Array<Pick<ChatMessage, "role" | "content">>
   ) => {
     const validated = aiChatInputSchema.parse({ message });
     return apiFetch<{
       reply: string;
+      intent: string;
       confidence: number;
+      usedAi: boolean;
+      cards: AssistantCardItem[];
+      miniSeries: AssistantMiniSeriesPoint[];
       suggestedActions: SuggestedAction[];
-    }>("/api/ai/chat", {
+    }>("/api/assistant", {
       method: "POST",
       body: JSON.stringify({ message: validated.message, history }),
     });

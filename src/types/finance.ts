@@ -1,98 +1,210 @@
-export type WorkspaceView = "overview" | "transactions" | "budgets" | "accounts";
+export type WorkspaceView = "overview" | "transactions" | "budgets" | "rules";
 
 export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
-export type TransactionCategory =
+export type ExpenseCategory =
   | "Alimentação"
   | "Transporte"
   | "Educação"
   | "Lazer"
-  | "Moradia"
-  | "Assinaturas & Software"
-  | "Receitas & Rendimentos"
-  | "Sem categoria";
+  | "Outros";
 
-export type ExpenseCategory = Exclude<
-  TransactionCategory,
-  "Receitas & Rendimentos" | "Sem categoria"
->;
+export type ExpenseSource = "image" | "text" | "manual";
+export type ExpenseStatus = "confirmed" | "needs_review";
 
-export type TransactionStatus = "Confirmado" | "Revisão pendente";
+export interface ExpenseConfidence {
+  confidence?: number;
+  rationale?: string;
+  fields?: {
+    merchant?: number;
+    amount?: number;
+    expense_date?: number;
+    category?: number;
+  };
+}
 
 export interface ExpenseItem {
   id: string;
-  date: string; // ISO yyyy-mm-dd
-  merchant: string;
-  description: string;
-  category: TransactionCategory;
-  amountCents: number; // positivo = entrada, negativo = saída (inteiro em centavos)
-  accountId: string;
-  status: TransactionStatus;
-  aiConfidence?: number;
-  aiRationale?: string;
-  taxDeductible?: boolean;
+  merchant: string | null;
+  amount_cents: number; // positivo = entrada, negativo = saída (inteiro em centavos)
+  expense_date: string; // ISO yyyy-mm-dd
+  category: ExpenseCategory;
+  note: string | null;
+  source: ExpenseSource | null;
+  status: ExpenseStatus;
+  confidence_json: ExpenseConfidence | null;
+  image_id?: string | null;
+  dedupe_hash?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExpenseListFilters {
+  from?: string;
+  to?: string;
+  category?: string;
+  q?: string;
+  minCents?: number;
+  maxCents?: number;
+  status?: "all" | "confirmed" | "needs_review";
+  sort?: "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
+  limit?: number;
+  cursor?: string | null;
+}
+
+export interface ExpenseListResponse {
+  items: ExpenseItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  totalCount: number;
 }
 
 export interface BudgetEnvelope {
   category: ExpenseCategory;
-  monthlyLimitCents: number;
+  limitCents: number;
+  alertPercent: number;
   spentCents: number;
+  remainingCents?: number;
+  usagePct?: number;
+  status?: "ok" | "alert" | "exceeded" | "unconfigured";
+  configured: boolean;
 }
 
-export interface SubscriptionItem {
-  id: string;
-  name: string;
-  vendor: string;
-  category: TransactionCategory;
-  amountCents: number;
-  renewalDate: string; // ISO yyyy-mm-dd
-  status: "Ativa" | "Pouco usada" | "Pausada";
-  lastUsedDaysAgo: number;
+export interface MerchantRuleItem {
+  merchant_norm: string;
+  category: ExpenseCategory;
+  updated_at: string;
 }
 
-export interface FinancialAccount {
-  id: string;
-  name: string;
-  institution: string;
-  type: "Conta Corrente" | "Reserva / CDB" | "Cartão de Crédito" | "Multi-Moeda";
-  balanceCents: number;
-  details: string;
-  lastSynced: string;
-}
-
-export interface CashFlowPoint {
+export interface DailySeriesPoint {
+  date: string;
+  day: number;
   label: string;
+  spentCents: number;
   inflowCents: number;
-  outflowCents: number;
-  netProjected?: boolean;
+  cumulativeSpentCents: number;
 }
 
-export interface UserProfile {
-  name: string;
-  planLabel: string;
-  avatarUrl?: string;
+export interface CategoryTotalItem {
+  category: ExpenseCategory;
+  spentCents: number;
+  sharePct: number;
+  count: number;
 }
 
-export interface FinancialSummary {
-  netWorthCents: number;
+export interface DashboardBudgetItem {
+  category: ExpenseCategory;
+  limitCents: number;
+  alertPercent: number;
+  spentCents: number;
+  remainingCents: number;
+  usagePct: number;
+  status: "ok" | "alert" | "exceeded" | "unconfigured";
+  configured: boolean;
+}
+
+export interface DashboardData {
+  month: string;
+  previousMonth: string;
+  totalMonthCents: number;
+  totalPreviousMonthCents: number;
+  variationPct: number | null;
   monthlyInflowCents: number;
-  monthlyOutflowCents: number;
   netSurplusCents: number;
   savingsRatePct: number;
-  accountsCount: number;
+  totalBudgetLimitCents: number;
+  dailySeries: DailySeriesPoint[];
+  byCategory: CategoryTotalItem[];
+  budgets: DashboardBudgetItem[];
+  recentExpenses: ExpenseItem[];
   pendingCount: number;
-  cashFlowHistory: CashFlowPoint[];
-  user?: UserProfile;
+  monthPendingCount: number;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
+export interface ParsedExpenseDraft {
+  draftId: string;
+  source: "image" | "text";
+  imageId: string | null;
+  imageUrl: string | null;
+  merchant: string;
+  amountCents: number | null;
+  expenseDate: string | null;
+  category: ExpenseCategory;
+  suggestedCategory: ExpenseCategory;
+  note: string;
+  status: ExpenseStatus;
+  ruleApplied: boolean;
+  confidence: {
+    merchant: number;
+    amount: number;
+    expense_date: number;
+    category: number;
+  };
+  duplicateOf: {
+    id: string;
+    merchant: string | null;
+    amount_cents: number;
+    expense_date: string;
+    category: ExpenseCategory;
+  } | null;
+}
+
+export type ParseImageItemResult =
+  | { ok: true; fileName: string; draft: ParsedExpenseDraft }
+  | {
+      ok: false;
+      fileName: string;
+      imageId: string | null;
+      imageUrl: string | null;
+      error: string;
+    };
+
+export interface FinancialInsightItem {
+  id: string;
+  kind:
+    | "category_growth"
+    | "budget_alert"
+    | "top_expense"
+    | "recurring_expense";
+  severity: "info" | "warning" | "alert";
+  title: string;
+  description: string;
+  metricLabel?: string;
+}
+
+export interface InsightsResponse {
+  month: string;
+  empty: boolean;
+  insights: FinancialInsightItem[];
+  cached: boolean;
+}
+
+export interface AssistantCardItem {
+  id: string;
+  merchant: string;
+  amountCents: number;
+  expenseDate: string;
+  category: ExpenseCategory;
+}
+
+export interface AssistantMiniSeriesPoint {
+  label: string;
+  valueCents: number;
 }
 
 export interface SuggestedAction {
   id: string;
   label: string;
-  type: "adjust_budget" | "categorize_pending" | "pause_subscription" | "navigate";
+  type: "adjust_budget" | "categorize_pending" | "navigate";
   category?: ExpenseCategory;
   amountCents?: number;
-  subscriptionId?: string;
   view?: WorkspaceView;
   applied?: boolean;
 }
@@ -103,11 +215,13 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   confidence?: number;
+  cards?: AssistantCardItem[];
+  miniSeries?: AssistantMiniSeriesPoint[];
   suggestedActions?: SuggestedAction[];
 }
 
-export interface AiBriefing {
-  headline: string;
-  summary: string;
-  confidence: number;
+export interface NotificationPreferences {
+  budgetAlerts: boolean;
+  pendingReviewReminder: boolean;
+  monthlyDigest: boolean;
 }

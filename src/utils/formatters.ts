@@ -1,6 +1,34 @@
-import type { ExpenseCategory, TransactionCategory } from "../types/finance";
+import type { ExpenseCategory } from "../types/finance";
 
 export const SAO_PAULO_TZ = "America/Sao_Paulo";
+
+const brlFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const dateFormatterBR = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const weekdayDateFormatterBR = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "long",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const monthYearFormatterBR = new Intl.DateTimeFormat("pt-BR", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 export function formatCentavos(
   cents: number,
@@ -17,12 +45,7 @@ export function formatCentavos(
       maximumFractionDigits: 1,
     })} mil`;
   } else {
-    formatted = absReais.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    formatted = brlFormatter.format(absReais);
   }
 
   if (options?.signed) {
@@ -35,9 +58,23 @@ export function formatCentavos(
   return formatted;
 }
 
+export function centavosToReaisInput(cents: number): string {
+  const abs = Math.abs(Math.round(cents)) / 100;
+  return abs.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function reaisInputToCentavos(rawValue: string): number | null {
-  const normalized = rawValue.trim().replace(/\s+/g, "").replace(",", ".");
-  if (!normalized) return null;
+  const trimmed = rawValue.trim().replace(/R\$/gi, "").replace(/\s+/g, "");
+  if (!trimmed) return null;
+
+  let normalized = trimmed;
+  if (trimmed.includes(",")) {
+    normalized = trimmed.replace(/\./g, "").replace(",", ".");
+  }
+
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return Math.round(parsed * 100);
@@ -46,8 +83,39 @@ export function reaisInputToCentavos(rawValue: string): number | null {
 export function formatDateBR(isoDate: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
   if (!match) return isoDate;
-  const [, year, month, day] = match;
-  return `${day}/${month}/${year}`;
+  const dt = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  );
+  return dateFormatterBR.format(dt);
+}
+
+export function formatDateWithWeekdayBR(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+  if (!match) return isoDate;
+  const dt = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  );
+  const label = weekdayDateFormatterBR.format(dt);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+export function formatMonthLabelPT(ym: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(ym.trim());
+  if (!match) return ym;
+  const dt = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+  const raw = monthYearFormatterBR.format(dt);
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+export function shiftYearMonth(ym: string, deltaMonths: number): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(ym.trim());
+  if (!match) return getTodayIsoSaoPaulo().slice(0, 7);
+  const dt = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1 + deltaMonths, 1)
+  );
+  const y = dt.getUTCFullYear();
+  const m = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
 }
 
 export function getTodayIsoSaoPaulo(): string {
@@ -71,49 +139,28 @@ export function getCurrentTimeSaoPaulo(): string {
 export interface CategoryMeta {
   color: string;
   tintBg: string;
-  shortLabel: string;
 }
 
-export const CATEGORY_META: Record<TransactionCategory, CategoryMeta> = {
+export const CATEGORY_META: Record<ExpenseCategory, CategoryMeta> = {
   Alimentação: {
     color: "#F97316",
     tintBg: "rgba(249, 115, 22, 0.12)",
-    shortLabel: "Alimentação",
   },
   Transporte: {
     color: "#0EA5E9",
     tintBg: "rgba(14, 165, 233, 0.12)",
-    shortLabel: "Transporte",
   },
   Educação: {
     color: "#8B5CF6",
     tintBg: "rgba(139, 92, 246, 0.12)",
-    shortLabel: "Educação",
   },
   Lazer: {
     color: "#EC4899",
     tintBg: "rgba(236, 72, 153, 0.12)",
-    shortLabel: "Lazer",
   },
-  Moradia: {
-    color: "#14B8A6",
-    tintBg: "rgba(20, 184, 166, 0.12)",
-    shortLabel: "Moradia",
-  },
-  "Assinaturas & Software": {
-    color: "#6366F1",
-    tintBg: "rgba(99, 102, 241, 0.12)",
-    shortLabel: "Assinaturas",
-  },
-  "Receitas & Rendimentos": {
-    color: "#10B981",
-    tintBg: "rgba(16, 185, 129, 0.12)",
-    shortLabel: "Receitas",
-  },
-  "Sem categoria": {
+  Outros: {
     color: "#64748B",
     tintBg: "rgba(100, 116, 139, 0.14)",
-    shortLabel: "Revisão pendente",
   },
 };
 
@@ -122,17 +169,5 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   "Transporte",
   "Educação",
   "Lazer",
-  "Moradia",
-  "Assinaturas & Software",
-];
-
-export const ALL_CATEGORIES: TransactionCategory[] = [
-  "Alimentação",
-  "Transporte",
-  "Educação",
-  "Lazer",
-  "Moradia",
-  "Assinaturas & Software",
-  "Receitas & Rendimentos",
-  "Sem categoria",
+  "Outros",
 ];

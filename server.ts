@@ -12,6 +12,18 @@ const PORT = Number(process.env.PORT) || 3000;
 async function startServer() {
   const expressApp = express();
 
+  // Headers de segurança básicos no servidor local
+  expressApp.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(self), microphone=(), geolocation=()"
+    );
+    next();
+  });
+
   // Forward /api/* requests directly to the Hono Pages Functions app
   expressApp.use("/api", async (req, res, next) => {
     try {
@@ -43,13 +55,29 @@ async function startServer() {
       });
 
       const webResponse = await honoApiApp.fetch(webRequest, {
-        APP_SECRET: process.env.APP_SECRET || "dev-secret",
-      } as never);
+        SUPABASE_URL: process.env.SUPABASE_URL ?? "",
+        SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ?? "",
+        SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+        TURNSTILE_SECRET: process.env.TURNSTILE_SECRET,
+      });
 
       res.status(webResponse.status);
       webResponse.headers.forEach((value, key) => {
+        if (key.toLowerCase() === "set-cookie") return;
         res.setHeader(key, value);
       });
+
+      const setCookies =
+        typeof (webResponse.headers as unknown as { getSetCookie?: () => string[] })
+          .getSetCookie === "function"
+          ? (webResponse.headers as unknown as { getSetCookie: () => string[] }).getSetCookie()
+          : [];
+      if (setCookies.length > 0) {
+        res.setHeader("Set-Cookie", setCookies);
+      } else {
+        const singleCookie = webResponse.headers.get("set-cookie");
+        if (singleCookie) res.setHeader("Set-Cookie", singleCookie);
+      }
 
       const arrayBuffer = await webResponse.arrayBuffer();
       res.send(Buffer.from(arrayBuffer));

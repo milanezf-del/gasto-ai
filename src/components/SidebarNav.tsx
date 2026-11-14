@@ -3,19 +3,20 @@ import {
   LayoutDashboard,
   ListOrdered,
   SlidersHorizontal,
-  Landmark,
+  Sparkles,
   Plus,
   X,
   User,
+  LogOut,
 } from "lucide-react";
-import type { UserProfile, WorkspaceView } from "../types/finance";
+import type { AuthUser, WorkspaceView } from "../types/finance";
 
 interface SidebarNavProps {
   activeView: WorkspaceView;
   onSelectView: (view: WorkspaceView) => void;
   pendingCount: number;
-  user?: UserProfile;
-  apiHealthy: boolean | null;
+  user: AuthUser;
+  onLogout: () => void;
   onOpenNewEntry: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
@@ -29,7 +30,7 @@ const NAV_ITEMS: Array<{
   { id: "overview", label: "Visão Geral", icon: LayoutDashboard },
   { id: "transactions", label: "Lançamentos", icon: ListOrdered },
   { id: "budgets", label: "Orçamentos e Metas", icon: SlidersHorizontal },
-  { id: "accounts", label: "Contas", icon: Landmark },
+  { id: "rules", label: "Regras e Conta", icon: Sparkles },
 ];
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
@@ -37,13 +38,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   onSelectView,
   pendingCount,
   user,
-  apiHealthy,
+  onLogout,
   onOpenNewEntry,
   mobileOpen,
   onCloseMobile,
 }) => {
-  const [imgError, setImgError] = React.useState(false);
-
   const navContent = (
     <div className="flex h-full flex-col justify-between bg-white dark:bg-[#0f131d] border-r border-slate-200/80 dark:border-white/[0.08] px-4 py-5 select-none">
       <div>
@@ -147,33 +146,31 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         </nav>
       </div>
 
-      <div className="pt-4 border-t border-slate-200/80 dark:border-white/[0.08] space-y-3">
-        <div className="flex items-center gap-3 px-2 py-1">
-          {user?.avatarUrl && !imgError ? (
-            <img
-              src={user.avatarUrl}
-              alt={user.name}
-              referrerPolicy="no-referrer"
-              onError={() => setImgError(true)}
-              className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-white/[0.1] shrink-0"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-[#171b26] border border-slate-200/70 dark:border-white/[0.08] text-slate-500 dark:text-[#908f9e] flex items-center justify-center shrink-0">
+      <div className="pt-4 border-t border-slate-200/80 dark:border-white/[0.08]">
+        <div className="flex items-center justify-between gap-2 px-2 py-1">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-[#6366F1]/10 dark:bg-[#818cf8]/15 text-[#4338CA] dark:text-[#bdc2ff] flex items-center justify-center shrink-0">
               <User className="w-4 h-4" />
             </div>
-          )}
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-[#0F172A] dark:text-[#dfe2f1] truncate">
-              {user ? user.name : "Conta não autenticada"}
-            </div>
-            <div className="text-xs text-slate-500 dark:text-[#908f9e] truncate">
-              {user
-                ? user.planLabel
-                : apiHealthy
-                ? "API conectada"
-                : "Aguardando conexão"}
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-[#0F172A] dark:text-[#dfe2f1] truncate">
+                {user.name || user.email.split("@")[0]}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-[#908f9e] truncate">
+                {user.email}
+              </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Sair"
+            aria-label="Sair da conta"
+            className="p-1.5 rounded-md text-slate-400 hover:text-[#F43F5E] hover:bg-[#F43F5E]/10 cursor-pointer shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

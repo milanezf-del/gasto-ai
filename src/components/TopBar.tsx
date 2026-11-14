@@ -1,6 +1,7 @@
 import React from "react";
 import { Menu, Moon, Sun, Monitor, Sparkles } from "lucide-react";
 import type { ThemePreference, WorkspaceView } from "../types/finance";
+import { PWAInstallButton } from "./PWAInstallButton";
 
 interface TopBarProps {
   activeView: WorkspaceView;
@@ -14,9 +15,9 @@ interface TopBarProps {
 
 const VIEW_TITLES: Record<WorkspaceView, string> = {
   overview: "Visão Geral",
-  transactions: "Lançamentos",
+  transactions: "Despesas e Lançamentos",
   budgets: "Orçamentos e Metas",
-  accounts: "Contas",
+  rules: "Perfil e Regras",
 };
 
 const THEME_OPTIONS: Array<{
@@ -45,7 +46,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           type="button"
           onClick={onOpenMobileNav}
           aria-label="Abrir menu de navegação"
-          className="lg:hidden p-2 -ml-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 dark:text-[#c6c5d5] dark:hover:text-white dark:hover:bg-[#1e293b] cursor-pointer"
+          className="lg:hidden p-2 -ml-1 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 dark:text-[#c6c5d5] dark:hover:text-white dark:hover:bg-[#1e293b] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -67,6 +68,8 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="flex items-center gap-2.5 shrink-0">
+        <PWAInstallButton />
+
         <div
           role="group"
           aria-label="Tema de exibição"
@@ -82,7 +85,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 onClick={() => onChangeTheme(opt.id)}
                 title={`Tema ${opt.label}`}
                 aria-pressed={active}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1] ${
                   active
                     ? "bg-white text-[#0F172A] shadow-xs dark:bg-[#262a35] dark:text-[#dfe2f1]"
                     : "text-slate-600 hover:text-slate-900 dark:text-[#908f9e] dark:hover:text-[#dfe2f1]"
