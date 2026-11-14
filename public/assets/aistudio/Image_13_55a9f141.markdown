@@ -1,0 +1,255 @@
+---
+name: Autonomous Financial Intelligence
+colors:
+  surface: '#faf8ff'
+  surface-dim: '#d2d9f4'
+  surface-bright: '#faf8ff'
+  surface-container-lowest: '#ffffff'
+  surface-container-low: '#f2f3ff'
+  surface-container: '#eaedff'
+  surface-container-high: '#e2e7ff'
+  surface-container-highest: '#dae2fd'
+  on-surface: '#131b2e'
+  on-surface-variant: '#464554'
+  inverse-surface: '#283044'
+  inverse-on-surface: '#eef0ff'
+  outline: '#767586'
+  outline-variant: '#c7c4d7'
+  surface-tint: '#494bd6'
+  primary: '#4648d4'
+  on-primary: '#ffffff'
+  primary-container: '#6063ee'
+  on-primary-container: '#fffbff'
+  inverse-primary: '#c0c1ff'
+  secondary: '#006c49'
+  on-secondary: '#ffffff'
+  secondary-container: '#6cf8bb'
+  on-secondary-container: '#00714d'
+  tertiary: '#b90538'
+  on-tertiary: '#ffffff'
+  tertiary-container: '#dc2c4f'
+  on-tertiary-container: '#fffbff'
+  error: '#ba1a1a'
+  on-error: '#ffffff'
+  error-container: '#ffdad6'
+  on-error-container: '#93000a'
+  primary-fixed: '#e1e0ff'
+  primary-fixed-dim: '#c0c1ff'
+  on-primary-fixed: '#07006c'
+  on-primary-fixed-variant: '#2f2ebe'
+  secondary-fixed: '#6ffbbe'
+  secondary-fixed-dim: '#4edea3'
+  on-secondary-fixed: '#002113'
+  on-secondary-fixed-variant: '#005236'
+  tertiary-fixed: '#ffdadb'
+  tertiary-fixed-dim: '#ffb2b7'
+  on-tertiary-fixed: '#40000d'
+  on-tertiary-fixed-variant: '#92002a'
+  background: '#faf8ff'
+  on-background: '#131b2e'
+  surface-variant: '#dae2fd'
+typography:
+  display-lg:
+    fontFamily: Inter
+    fontSize: 40px
+    fontWeight: '700'
+    lineHeight: 48px
+    letterSpacing: -0.03em
+  display-lg-mobile:
+    fontFamily: Inter
+    fontSize: 32px
+    fontWeight: '700'
+    lineHeight: 40px
+    letterSpacing: -0.025em
+  headline-lg:
+    fontFamily: Inter
+    fontSize: 28px
+    fontWeight: '600'
+    lineHeight: 36px
+    letterSpacing: -0.02em
+  headline-md:
+    fontFamily: Inter
+    fontSize: 22px
+    fontWeight: '600'
+    lineHeight: 28px
+    letterSpacing: -0.015em
+  headline-sm:
+    fontFamily: Inter
+    fontSize: 18px
+    fontWeight: '600'
+    lineHeight: 24px
+    letterSpacing: -0.01em
+  body-lg:
+    fontFamily: Inter
+    fontSize: 16px
+    fontWeight: '400'
+    lineHeight: 24px
+    letterSpacing: -0.005em
+  body-md:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: '400'
+    lineHeight: 20px
+    letterSpacing: 0em
+  body-sm:
+    fontFamily: Inter
+    fontSize: 12px
+    fontWeight: '400'
+    lineHeight: 16px
+    letterSpacing: 0em
+  label-md:
+    fontFamily: Inter
+    fontSize: 13px
+    fontWeight: '500'
+    lineHeight: 16px
+    letterSpacing: 0.01em
+  label-sm:
+    fontFamily: Inter
+    fontSize: 11px
+    fontWeight: '600'
+    lineHeight: 14px
+    letterSpacing: 0.04em
+  currency-display:
+    fontFamily: Inter
+    fontSize: 36px
+    fontWeight: '700'
+    lineHeight: 44px
+    letterSpacing: -0.02em
+  currency-tabular:
+    fontFamily: Inter
+    fontSize: 15px
+    fontWeight: '600'
+    lineHeight: 20px
+    letterSpacing: 0em
+rounded:
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+  lg: 1rem
+  xl: 1.5rem
+  full: 9999px
+spacing:
+  gutter: 1.5rem
+  gutter-mobile: 1rem
+  margin: 2rem
+  margin-mobile: 1rem
+  space-xs: 0.25rem
+  space-sm: 0.5rem
+  space-md: 1rem
+  space-lg: 1.5rem
+  space-xl: 2rem
+---
+
+## Brand & Style
+
+The design system establishes a high-trust, precision-driven visual language tailored for automated personal wealth management and AI-guided financial planning. Drawing inspiration from modern fintech institutions and ergonomic productivity software, the aesthetic relies on surgical clarity, structural light surfaces, and refined indigo accents.
+
+### Personality & Tone
+- **Authoritative & Dependable:** Financial interactions require uncompromised structural balance, predictable interactions, and instant legibility.
+- **Intelligent & Proactive:** AI features do not disrupt the workspace; they surface contextually through refined micro-indicators, subtle luminosity, and probabilistic confidence badges.
+- **Frictionless & Crisp:** Elimination of visual noise in favor of high-contrast typographic hierarchy, tabular numeric alignment, and decisive categorical color codes.
+
+### Design Movement
+A fusion of **Corporate Precision** and **Modern Functional Minimalism**. The interface prioritizes white and slate-tinted canvas backdrops, high-contrast typography, restrained hairline borders, and soft ambient drop shadows to reinforce layered elevation without visual heaviness.
+
+## Colors
+
+The palette balances systematic clarity with strict semantic differentiation. It maintains WCAG AA contrast across all text and functional tokens against pure white (`#FFFFFF`) and slate canvas tiers (`#F8FAFC`).
+
+### Core Roles
+- **Primary (`#6366F1`):** Applied to primary calls to action, active navigation states, selected metrics, and synthetic AI focus indicators.
+- **Secondary / Success (`#10B981`):** Dedicated to positive cash flow, account balances, surplus metrics, and savings targets.
+- **Tertiary / Critical (`#F43F5E`):** Reserved for budget overruns, elevated spend velocity, and destructive confirmations.
+- **Warning / Alert (`#F59E0B`):** Denotes subscription renewals, approach toward spending thresholds, and pending clearances.
+- **Neutral Primary (`#0F172A`):** Defines high-emphasis typography, critical figures, and prominent headers.
+
+### Category Encodings
+Transaction classifications require deterministic color association to maintain instant peripheral comprehension:
+- **Food & Dining:** `#F97316` (Warm Orange)
+- **Transport & Mobility:** `#0EA5E9` (Electric Sky)
+- **Education & Upskilling:** `#8B5CF6` (Vivid Purple)
+- **Leisure & Lifestyle:** `#EC4899` (Magenta Pink)
+- **Uncategorized / Miscellaneous:** `#64748B` (Slate)
+
+### AI Accent Matrix
+Machine learning recommendations utilize low-opacity primary overlays (`rgba(99, 102, 241, 0.08)`) with dynamic border gradients, indicating calculated probabilistic certainty (e.g., "98% AI Confidence") without obstructing baseline monetary data.
+
+## Typography
+
+The type scale is calibrated for structured density, high-velocity scanning, and complex numeric feeds. Inter serves as the foundation across headlines, functional prose, and micro-labels.
+
+### Tabular Formatting
+All currency figures (BRL `R$ 1.234,56`), balance tickers, percentages, and data grids enforce OpenType tabular figures (`font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1`). This eliminates character-width jittering during live re-renders and aligns integer and fractional decimals vertically across transaction lists.
+
+### Hierarchy & Scale Rules
+- **Display & Large Headlines:** Restricted to high-level balance metrics, net-worth summaries, and modal titles.
+- **Labels & Micro-Tags:** Styled with slightly loosened letter-spacing (`0.01em` to `0.04em`) and medium/semibold weights to ensure readability at `11px` and `13px` inside AI confidence tags and category chips.
+- **Text Wrapping:** Financial amounts must never break across multiple lines; set `white-space: nowrap` for all tokens paired with currency symbols.
+
+## Layout & Spacing
+
+The layout operates on an 8-point geometric grid system, ensuring mathematical harmony between vertical line heights, internal component padding, and sectional containers.
+
+### Grid Models
+- **Desktop (min-width: 1024px):** 12-column responsive layout with max-width containment at `1280px`. Gutters scale at `1.5rem` (`24px`) with outer canvas margins at `2rem` (`32px`).
+- **Tablet (768px - 1023px):** 8-column layout with fluid margin compression down to `1.5rem`.
+- **Mobile (< 768px):** 4-column layout utilizing a consolidated `1rem` (`16px`) margin and gutter. Horizontal cards stretch edge-to-edge with unified padding.
+
+### Spacing Token Application
+- **`space-xs` (4px):** Tight inline gaps, icon-to-label separation, and badge micro-padding.
+- **`space-sm` (8px):** Structural element gaps in lists, vertical pairings between labels and inputs.
+- **`space-md` (16px):** Standard internal container padding for compact cards, table cell padding, and form row spacing.
+- **`space-lg` (24px):** Standard card padding, balance widget containers, and dashboard card gutters.
+- **`space-xl` (32px):** Primary vertical section spacing separating distinct financial periods.
+
+## Elevation & Depth
+
+Visual separation relies on clean surface layering paired with delicate border definitions rather than aggressive depth. This maintains an uncluttered, modern workspace reminiscent of high-end analytical software.
+
+### Surface Tiers
+- **Canvas Base (`#F8FAFC`):** The primary view boundary for the entire application.
+- **Surface Elevation 1 (`#FFFFFF`):** High-contrast interactive planes, cards, and modal backdrops.
+- **Surface Inset (`#F1F5F9`):** Recessed inputs, search bars, and tabular header rows.
+
+### Shadow Structure
+Shadows are hyper-diffused and tint-shifted toward cool slate to avoid muddy gray halos:
+- **Card Ambient:** `0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.02)`
+- **Hover & Overlay:** `0 10px 15px -3px rgba(15, 23, 42, 0.04), 0 4px 6px -4px rgba(15, 23, 42, 0.02)`
+- **Modal & Popover:** `0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04)`
+
+### Hairline Borders
+All elevated cards, floating menus, and dropdowns feature a uniform, semi-transparent hairline stroke: `1px solid rgba(226, 232, 240, 0.8)`. This maintains geometric legibility on both pure white surfaces and off-white view canvases.
+
+## Shapes
+
+The design system incorporates a balanced, modern curved boundary profile (`roundedness: 2`). This aesthetic softens technical data sheets while retaining professional discipline.
+
+### Geometry Hierarchy
+- **Base Rounding (`rounded-md`, 8px):** Input fields, inline alert strips, category badges, and nested table actions.
+- **Card Rounding (`rounded-lg`, 16px):** Primary spend summary cards, charts, transaction modules, and floating financial action sheets.
+- **Container Rounding (`rounded-xl`, 24px):** Bottom sheets, root dialog containers, and prominent AI insight callouts.
+- **Fully Rounded (`rounded-full`):** Category icon avatars, user status indicators, action pill buttons, and AI confidence tags.
+
+## Components
+
+### Buttons
+- **Primary:** Background `#6366F1`, text `#FFFFFF`, font weight `600`, border radius `8px`. Active states transition to `#4F46E5`. Hover states trigger a subtle upward translate (`-0.5px`) with a soft indigo ambient drop shadow (`0 4px 12px rgba(99, 102, 241, 0.25)`).
+- **Secondary:** Surface `#FFFFFF`, border `1px solid #E2E8F0`, text `#0F172A`. Hover background `#F8FAFC`.
+- **Ghost / Tertiary:** No fill or border, text `#64748B`, hover text `#0F172A`, hover background `#F1F5F9`.
+
+### Input Fields & Controls
+- **Text & Currency Inputs:** Surface `#FFFFFF`, border `1px solid #CBD5E1`, border radius `8px`, height `44px`, horizontal padding `12px`. Focus state introduces a crisp focus ring: `box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2)` with border `#6366F1`.
+- **Currency Entry:** Inputs dedicated to values display the fixed prefix `R$` in a muted weight (`#94A3B8`), with the value rendered using `Inter` with `tabular-nums` in `#0F172A`.
+- **Checkboxes & Radios:** Size `18px`, border `1.5px solid #CBD5E1`. Selected state uses fill `#6366F1` with an SVG tick mark in `#FFFFFF`.
+
+### Cards & Data Panels
+- Standard transaction containers utilize background `#FFFFFF`, border radius `16px`, border `1px solid #E2E8F0`, and ambient low-opacity drop shadows.
+- Inner padding strictly uses `space-md` (`16px`) for lists and `space-lg` (`24px`) for high-level asset totals.
+
+### Category Chips & Badges
+- Compact indicators rendering category states use 10% opacity tints of the assigned category color as the background, paired with the full-saturation category hex for foreground text and icon glyphs.
+- Rounded radius: `rounded-full` (`9999px`) with padding `2px 8px`.
+
+### AI Confidence Badges & Insights
+- **Confidence Badges:** Display format `[Sparkle Icon] 98% Confiança da IA`. Rendered with a linear border gradient (`#6366F1` to `#8B5CF6`), subtle surface tint (`rgba(99, 102, 241, 0.05)`), and deep indigo label text (`#4338CA`).
+- **Shimmer States:** Dynamic AI calculation placeholders incorporate an animated diagonal light pass across a `#F1F5F9` base surface to signal background processing without blocking interaction.

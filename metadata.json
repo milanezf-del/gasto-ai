@@ -1,0 +1,6 @@
+{
+  "name": "Monetis — Autonomous Financial Intelligence",
+  "description": "Precision personal wealth workspace with predictive cash flow analytics, automated transaction categorization, and contextual AI financial insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
